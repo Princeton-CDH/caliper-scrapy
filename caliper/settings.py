@@ -13,6 +13,7 @@ SPIDER_MODULES = ['caliper.spiders']
 NEWSPIDER_MODULE = 'caliper.spiders'
 
 # override scrapy default log level of DEBUG
+LOG_LEVEL = "WARN"
 
 
 # Crawl responsibly by identifying yourself (and your website) on the user-agent
