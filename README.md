@@ -10,6 +10,34 @@ scrapy spider for crawling and reporting on website content and urls
 pip install -r requirements.txt
 ```
 
+### Development Setup
+
+Install development dependencies:
+```
+pip install -r requirements/dev.txt
+```
+
+If you plan to contribute to this repository, install the configured pre-commit hooks:
+```
+pre-commit install
+```
+
+This will add a pre-commit hook to automatically style your python code with `[black](https://github.com/psf/black) and [isort](https://github.com/pycqa/isort).
+
+Because these styling conventions were instituted after multiple releases of
+development on this project, ``git blame`` may not reflect the true author
+of a given line. In order to see a more accurate ``git blame`` execute the
+following command::
+```
+git blame <FILE> --ignore-revs-file .git-blame-ignore-revs
+```
+
+Or configure your git to always ignore styling revision commits:
+```
+git config blame.ignoreRevsFile .git-blame-ignore-revs
+```
+
+
 ## Usage
 
 To run the spider, call it with scrapy and specify the url for the site you want to crawl.  Only links within the same domain (local urls or absolute) will be followed
