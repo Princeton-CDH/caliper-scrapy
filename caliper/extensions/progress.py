@@ -19,8 +19,6 @@ class SpiderProgressBar:
             progress.BarColumn(bar_width=None),  # full width
             "{task.completed}/{task.total}",
             "{task.percentage:>3.1f}%",
-            progress.TimeRemainingColumn(),
-            "/",
             progress.TimeElapsedColumn(),
             transient=True,
         )
