@@ -3,11 +3,15 @@ import urllib.parse
 from datetime import datetime
 
 import scrapy
+from scrapy.spiders import SitemapSpider
 
 
-class CaliperSpider(scrapy.Spider):
-    """Caliper spider. Requires starting url to be passed in.  Only urls
-    within the same domain will be followed and included in the crawl.
+class CaliperSpider(SitemapSpider):
+    """Caliper spider. Requires starting url to be passed in; crawls
+    starting from the URL passed in and any sitemaps detected from robots.txt.
+    Only urls within the same domain (excluding subdomains) will be
+    followed and included in the crawl.
+
     Example usage::
 
         scrapy crawl caliper -a url=https://cdh.princeton.edu -o cdh-datetime-vXX.jl
@@ -17,16 +21,34 @@ class CaliperSpider(scrapy.Spider):
     name = "caliper"
     handle_httpstatus_list = [200, 404, 401, 403, 410, 301, 302, 303, 500]
 
+    # sitemap and other url set in init from argument
+    sitemap_urls = []
+    other_urls = []
+
     iframes = []
     error_pages = []
 
     def __init__(self, *args, **kwargs):
         super(CaliperSpider, self).__init__(*args, **kwargs)
         start_url = kwargs.get("url")
-        self.start_urls = [start_url]
+        # start with the sitemap via robots.txt
+        self.sitemap_urls = [urllib.parse.urljoin(start_url, "robots.txt")]
+        # but include root site url as well to discover all pages and assets
+        self.other_urls = [start_url]
+
         # parse starting url and store the domain;
         # used to keep crawl to within this site
         self.domain = urllib.parse.urlsplit(start_url).netloc
+
+    def start_requests(self):
+        # return requests for sitemap url plus any other
+        return list(super(CaliperSpider, self).start_requests()) + \
+            [scrapy.Request(x, self.parse) for x in self.other_urls]
+
+    # NOTE: it would be nice to track which pages are included in a sitemap,
+    # and also include the sitemap urls in the parsed response output.
+    # However, that might require extending or ignoring and re-implementing
+    # internal SitemapSpider parse methods...
 
     def parse(self, response):
         # return information for the current url
