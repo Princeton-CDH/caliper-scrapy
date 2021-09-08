@@ -54,6 +54,9 @@ class SpiderProgressBar:
 
     def spider_closed(self, spider):
         pass
+        # NOTE: leaving the progress bar open for now
+        # so final display includes the total items / time
+
         # self.progress.stop_task(self.tasks[spider.name])
         # once all tasks have been removed, exit the progress bar
         # if self.progress.finished:
