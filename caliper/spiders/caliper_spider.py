@@ -3,6 +3,7 @@ import urllib.parse
 from datetime import datetime
 
 import scrapy
+from scrapy.spiders.sitemap import Sitemap, iterloc, sitemap_urls_from_robots
 
 
 class CaliperSpider(scrapy.Spider):
@@ -23,12 +24,15 @@ class CaliperSpider(scrapy.Spider):
     def __init__(self, *args, **kwargs):
         super(CaliperSpider, self).__init__(*args, **kwargs)
         start_url = kwargs.get("url")
-        self.start_urls = [start_url]
+        # look for a robots.txt at the top level
+        robots_txt_url = urllib.parse.urljoin(start_url, "robots.txt")
+        self.start_urls = [start_url, robots_txt_url]
         # parse starting url and store the domain;
         # used to keep crawl to within this site
         self.domain = urllib.parse.urlsplit(start_url).netloc
 
     def parse(self, response):
+
         # return information for the current url
         yield {
             "url": response.url,
@@ -48,12 +52,19 @@ class CaliperSpider(scrapy.Spider):
         # if content is html, look for links and other assets to crawl
         # find all links and included content:
         # header link, image, script, a, iframe
-        is_texthtml = (
-            "Content-Type" in response.headers
-            and "text/html" in response.headers.get("Content-Type").decode()
+        content_type = (
+            response.headers.get("Content-Type").decode()
+            if "Content-Type" in response.headers
+            else None
         )
 
-        if is_texthtml:
+        # is_texthtml = (content_type.startswith("text/html"))
+        #     "Content-Type" in response.headers
+        #     and "text/html" in response.headers.get("Content-Type").decode()
+        # )
+
+        # check using startswith to allow optional encoding information
+        if content_type.startswith("text/html"):
             urls = []
             # html links, excluding mail tos
             urls.extend(
@@ -99,6 +110,21 @@ class CaliperSpider(scrapy.Spider):
 
             yield from response.follow_all(
                 site_urls, callback=self.parse, meta={"referrer": response.url}
+            )
+
+        # if parsing robots.txt, follow sitemap urls
+        if response.url.endswith("/robots.txt"):
+            yield from response.follow_all(
+                sitemap_urls_from_robots(response.text, base_url=response.url),
+                callback=self.parse,
+                meta={"referrer": response.url},
+            )
+        # if parsing an xml sitemap, follow sitemap or location urls
+        if content_type == "application/xml" and "sitemap" in response.url:
+            # use class and location iterator from sitemap spider code
+            sitemap = Sitemap(response.body)
+            yield from response.follow_all(
+                iterloc(sitemap), callback=self.parse, meta={"referrer": response.url}
             )
 
         if response.status in [301, 302, 303]:
