@@ -17,7 +17,7 @@ LOG_LEVEL = "WARN"
 
 
 # Crawl responsibly by identifying yourself (and your website) on the user-agent
-# USER_AGENT = 'caliper (+http://www.yourdomain.com)'
+USER_AGENT = 'caliper (+http://cdh.princeton.edu)'
 
 # Obey robots.txt rules
 ROBOTSTXT_OBEY = True
@@ -59,9 +59,12 @@ ROBOTSTXT_OBEY = True
 
 # Enable or disable extensions
 # See https://docs.scrapy.org/en/latest/topics/extensions.html
-# EXTENSIONS = {
-#    'scrapy.extensions.telnet.TelnetConsole': None,
-# }
+EXTENSIONS = {
+   'caliper.extensions.progress.SpiderProgressBar': 500,
+}
+
+# enable progress bar extension
+PROGRESSBAR_ENABLED = True
 
 # Configure item pipelines
 # See https://docs.scrapy.org/en/latest/topics/item-pipeline.html
