@@ -7,20 +7,32 @@ from scrapy import signals
 from scrapy.exceptions import NotConfigured
 
 
+class CrawlerProgress(progress.Progress):
+    # extend default progress bar to customize output
+    # display current url
+
+    def get_renderables(self):
+        """Get a number of renderables for the progress display."""
+        for task in self.tasks:
+            if "url" in task.fields:
+                yield "URL: %s" % task.fields["url"]
+        table = self.make_tasks_table(self.tasks)
+        yield table
+
+
 class SpiderProgressBar:
     """Progress bar tracking the number of requests queued
     and items scraped."""
 
-    # currently written for a single spider
+    # currently only tested with a single spider
 
     def __init__(self):
-        self.progress = progress.Progress(
+        self.progress = CrawlerProgress(
             "{task.description}",
             progress.BarColumn(bar_width=None),  # full width
             "{task.completed}/{task.total}",
             "{task.percentage:>3.1f}%",
             progress.TimeElapsedColumn(),
-            transient=True,
         )
         self.tasks = {}
         self.totals = defaultdict(int)
@@ -48,22 +60,18 @@ class SpiderProgressBar:
 
     def spider_opened(self, spider):
         self.progress.__enter__()  # open context manager usually called via "with"
-        self.tasks[spider.name] = self.progress.add_task("Crawling...")
+        self.tasks[spider.name] = self.progress.add_task("Crawling...", url="")
 
     def spider_closed(self, spider):
-        pass
-        # NOTE: leaving the progress bar open for now
-        # so final display includes the total items / time
-
         # self.progress.stop_task(self.tasks[spider.name])
         # once all tasks have been removed, exit the progress bar
-        # if self.progress.finished:
-        # how to indicate successful exit?
-        # self.progress.__exit__(exc_type=None, exc_val=0, exc_tb=None)
+        if self.progress.finished:
+            # how to indicate successful exit?
+            self.progress.__exit__(exc_type=None, exc_val=0, exc_tb=None)
 
     def item_scraped(self, item, spider):
         # increment progress bar
-        self.progress.advance(self.tasks[spider.name])
+        self.progress.update(self.tasks[spider.name], advance=1, url=item["url"])
 
     def request_scheduled(self, request, spider):
         # when a new request is scheduled, increase the total
