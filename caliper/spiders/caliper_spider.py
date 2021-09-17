@@ -64,7 +64,7 @@ class CaliperSpider(scrapy.Spider):
         # )
 
         # check using startswith to allow optional encoding information
-        if content_type.startswith("text/html"):
+        if content_type and content_type.startswith("text/html"):
             urls = []
             # html links, excluding mail tos
             urls.extend(
