@@ -92,7 +92,7 @@ def main():
     parser.add_argument("url", help="URL for the site to be crawled")
     parser.add_argument(
         "output",
-        help="filename where the filtered corpus should be saved",
+        help="filename where the crawl report should be saved",
         type=pathlib.Path,
     )
     parser.add_argument(
