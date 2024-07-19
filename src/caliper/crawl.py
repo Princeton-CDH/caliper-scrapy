@@ -3,8 +3,7 @@ import argparse
 import csv
 import datetime
 import pathlib
-import signal
-import functools
+from signal import SIGINT, SIGTERM
 
 from tqdm import tqdm
 from spider_rs import Website
@@ -15,7 +14,7 @@ USER_AGENT = "caliper (+http://cdh.princeton.edu)"
 
 
 class ReportSubscription:
-    def __init__(self, output):
+    def __init__(self, output, show_progress=True):
         self.filehandle = output.open("w")
         self.csvwriter = csv.writer(self.filehandle)
         self.csvwriter.writerow(
@@ -33,8 +32,11 @@ class ReportSubscription:
         )
 
         # postfix automatically starts with a comma
-        self.status = tqdm(desc="Crawling", bar_format="{desc}{postfix}")
-        self.pbar = tqdm(bar_format="{n:,} urls {elapsed}")
+        disable_progress = not show_progress
+        self.status = tqdm(
+            desc="Crawling", bar_format="{desc}{postfix}", disable=disable_progress
+        )
+        self.pbar = tqdm(bar_format="{n:,} urls {elapsed}", disable=disable_progress)
         self.page_count = 0
 
     def __call__(self, page):
@@ -64,7 +66,7 @@ class ReportSubscription:
         self.pbar.close()
 
 
-async def crawl(url, output):
+async def crawl(url, output, show_progress=True):
     # second arg indicates we want raw content
     # crawl all resources found, not just web pages
     website = (
@@ -74,23 +76,13 @@ async def crawl(url, output):
         .with_user_agent(USER_AGENT)
     )
 
-    def exit_early(signum, loop):
-        print("exit early")
-        loop.stop()
-        website.stop()
-
-    # # Set the signal handler
-    # signal.signal(signal.SIGINT, signal_handler)
-
+    # handle ctrl-c
     loop = asyncio.get_running_loop()
+    for signal_enum in [SIGINT, SIGTERM]:
+        #        loop.add_signal_handler(signal_enum, loop.stop)
+        loop.add_signal_handler(signal_enum, website.stop)
 
-    for signame in {"SIGINT", "SIGTERM"}:
-        loop.add_signal_handler(
-            getattr(signal, signame), functools.partial(exit_early, signame, loop)
-        )
-
-    # await asyncio.sleep(3600)
-    website.crawl(ReportSubscription(output))
+    website.crawl(ReportSubscription(output, show_progress=show_progress))
 
 
 def main():
@@ -110,7 +102,7 @@ def main():
         default=True,
     )
     args = parser.parse_args()
-    asyncio.run(crawl(args.url, args.output))
+    asyncio.run(crawl(args.url, args.output, show_progress=args.progress))
 
 
 if __name__ == "__main__":
