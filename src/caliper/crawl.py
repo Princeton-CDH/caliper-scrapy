@@ -3,7 +3,6 @@ import argparse
 import csv
 import datetime
 import pathlib
-from signal import SIGINT, SIGTERM
 
 from tqdm import tqdm
 from spider_rs import Website
@@ -75,13 +74,6 @@ async def crawl(url, output, show_progress=True):
         .with_respect_robots_txt(True)
         .with_user_agent(USER_AGENT)
     )
-
-    # handle ctrl-c
-    loop = asyncio.get_running_loop()
-    for signal_enum in [SIGINT, SIGTERM]:
-        #        loop.add_signal_handler(signal_enum, loop.stop)
-        loop.add_signal_handler(signal_enum, website.stop)
-
     website.crawl(ReportSubscription(output, show_progress=show_progress))
 
 
@@ -102,7 +94,10 @@ def main():
         default=True,
     )
     args = parser.parse_args()
-    asyncio.run(crawl(args.url, args.output, show_progress=args.progress))
+    try:
+        asyncio.run(crawl(args.url, args.output, show_progress=args.progress))
+    except KeyboardInterrupt:
+        raise SystemExit
 
 
 if __name__ == "__main__":
