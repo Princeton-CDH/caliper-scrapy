@@ -44,12 +44,12 @@ class ReportSubscription:
                 page.url,
                 page.status_code,
                 # some titles (*cough* PPA) include leading/trailing whitesapce
-                page.title().strip(),
+                str(page.title()).strip(),
                 page.headers.get("content-type"),
                 page.headers.get("last-modified"),
                 page.headers.get("content-length"),
                 page.headers.get("date"),
-                len(page.raw_content),
+                len(page.content),
                 # timestamp in isoformat so we can filter csv more easily
                 datetime.datetime.now(tz=datetime.UTC).isoformat(),
             ]
@@ -66,10 +66,9 @@ class ReportSubscription:
 
 
 async def crawl(url, output, show_progress=True):
-    # second arg indicates we want raw content
     # crawl all resources found, not just web pages
     website = (
-        Website(url, True)
+        Website(url)
         .with_full_resources(True)
         .with_respect_robots_txt(True)
         .with_user_agent(USER_AGENT)
