@@ -19,10 +19,10 @@ pip install -e .
 
 ## Usage
 
-To run the spider, call it with the url for the site you want to crawl and the output filename for the CSV report to be generated.  Only links within the same domain (local urls or absolute) will be followed.
+To run the spider, call it with the URL for the site you want to crawl and the output filename for the CSV report to be generated.  Only links within the same domain (local URLs or absolute) will be followed.
 
-```
-caliper https://cdh.princeton.edu cdh-datetime-vXX.csv
+```sh
+caliper https://startwords.cdh.princeton.edu startwords-datetime-vXX.csv
 ```
 
 ### Development Setup
