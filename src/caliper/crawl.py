@@ -7,6 +7,7 @@ import argparse
 import csv
 import datetime
 import pathlib
+import urllib.parse
 
 from tqdm import tqdm
 from spider_rs import Website
@@ -78,6 +79,10 @@ async def crawl(url, output, show_progress=True):
         .with_respect_robots_txt(True)
         .with_user_agent(USER_AGENT)
     )
+    # if the URL has a non-root path, restrict crawling to that subtree
+    base_path = urllib.parse.urlparse(url).path
+    if base_path and base_path != "/":
+        website = website.with_whitelist_url([base_path])
     website.crawl(ReportSubscription(output, show_progress=show_progress))
 
 
