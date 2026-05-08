@@ -72,13 +72,13 @@ class TestReportSubscription:
 
         rows = list(csv.reader(output.open()))
         assert len(rows) == 2
-        url, status, title, ctype, last_mod, clen, date, size, ts = rows[1]
+        url, status, title, ctype, last_mod, content_len, date, size, ts = rows[1]
         assert url == "https://example.com/about"
         assert status == "200"
         assert title == "About"
         assert ctype == "text/html; charset=utf-8"
         assert last_mod == "Wed, 01 Jan 2025 00:00:00 GMT"
-        assert clen == "4321"
+        assert content_len == "4321"
         assert date == "Wed, 08 May 2026 12:00:00 GMT"
         assert size == "750"
 
@@ -108,10 +108,10 @@ class TestReportSubscription:
         subscription(make_page(headers={}))
         subscription.filehandle.flush()
         rows = list(csv.reader(output.open()))
-        _, _, _, ctype, last_mod, clen, date, _, _ = rows[1]
+        _, _, _, ctype, last_mod, content_len, date, _, _ = rows[1]
         assert ctype == ""
         assert last_mod == ""
-        assert clen == ""
+        assert content_len == ""
         assert date == ""
 
 
@@ -119,8 +119,12 @@ class TestReportSubscription:
 def mock_website():
     with patch("caliper.crawl.Website") as mock_cls:
         instance = MagicMock()
-        for method in ("with_full_resources", "with_respect_robots_txt",
-                       "with_user_agent", "with_whitelist_url"):
+        for method in (
+            "with_full_resources",
+            "with_respect_robots_txt",
+            "with_user_agent",
+            "with_whitelist_url",
+        ):
             getattr(instance, method).return_value = instance
         mock_cls.return_value = instance
         yield mock_cls, instance
@@ -129,39 +133,61 @@ def mock_website():
 class TestCrawl:
     def test_website_initialized_with_url(self, tmp_path, mock_website):
         mock_cls, _ = mock_website
-        asyncio.run(crawl("https://example.com/", tmp_path / "out.csv", show_progress=False))
+        asyncio.run(
+            crawl("https://example.com/", tmp_path / "out.csv", show_progress=False)
+        )
         mock_cls.assert_called_once_with("https://example.com/")
 
     def test_website_options_configured(self, tmp_path, mock_website):
         _, instance = mock_website
-        asyncio.run(crawl("https://example.com/", tmp_path / "out.csv", show_progress=False))
+        asyncio.run(
+            crawl("https://example.com/", tmp_path / "out.csv", show_progress=False)
+        )
         instance.with_full_resources.assert_called_once_with(True)
         instance.with_respect_robots_txt.assert_called_once_with(True)
         instance.with_user_agent.assert_called_once_with(USER_AGENT)
 
     def test_whitelist_applied_for_subpath(self, tmp_path, mock_website):
         _, instance = mock_website
-        asyncio.run(crawl("https://example.com/blog/", tmp_path / "out.csv", show_progress=False))
+        asyncio.run(
+            crawl(
+                "https://example.com/blog/", tmp_path / "out.csv", show_progress=False
+            )
+        )
         instance.with_whitelist_url.assert_called_once_with(["/blog/"])
 
-    def test_whitelist_applied_for_path_without_trailing_slash(self, tmp_path, mock_website):
+    def test_whitelist_applied_for_path_without_trailing_slash(
+        self, tmp_path, mock_website
+    ):
         _, instance = mock_website
-        asyncio.run(crawl("https://example.com/licenses", tmp_path / "out.csv", show_progress=False))
+        asyncio.run(
+            crawl(
+                "https://example.com/licenses",
+                tmp_path / "out.csv",
+                show_progress=False,
+            )
+        )
         instance.with_whitelist_url.assert_called_once_with(["/licenses"])
 
     def test_no_whitelist_for_root_slash(self, tmp_path, mock_website):
         _, instance = mock_website
-        asyncio.run(crawl("https://example.com/", tmp_path / "out.csv", show_progress=False))
+        asyncio.run(
+            crawl("https://example.com/", tmp_path / "out.csv", show_progress=False)
+        )
         instance.with_whitelist_url.assert_not_called()
 
     def test_no_whitelist_for_bare_domain(self, tmp_path, mock_website):
         _, instance = mock_website
-        asyncio.run(crawl("https://example.com", tmp_path / "out.csv", show_progress=False))
+        asyncio.run(
+            crawl("https://example.com", tmp_path / "out.csv", show_progress=False)
+        )
         instance.with_whitelist_url.assert_not_called()
 
     def test_crawl_called_with_subscription(self, tmp_path, mock_website):
         _, instance = mock_website
-        asyncio.run(crawl("https://example.com/", tmp_path / "out.csv", show_progress=False))
+        asyncio.run(
+            crawl("https://example.com/", tmp_path / "out.csv", show_progress=False)
+        )
         instance.crawl.assert_called_once()
         assert isinstance(instance.crawl.call_args[0][0], ReportSubscription)
 
@@ -169,8 +195,10 @@ class TestCrawl:
 class TestMain:
     def test_calls_crawl_with_url_and_output(self, tmp_path):
         output = tmp_path / "out.csv"
-        with patch("caliper.crawl.crawl", new_callable=AsyncMock) as mock_crawl, \
-             patch("sys.argv", ["caliper", "https://example.com", str(output)]):
+        with (
+            patch("caliper.crawl.crawl", new_callable=AsyncMock) as mock_crawl,
+            patch("sys.argv", ["caliper", "https://example.com", str(output)]),
+        ):
             main()
         mock_crawl.assert_called_once_with(
             "https://example.com", pathlib.Path(str(output)), show_progress=True
@@ -178,23 +206,36 @@ class TestMain:
 
     def test_progress_defaults_to_true(self, tmp_path):
         output = tmp_path / "out.csv"
-        with patch("caliper.crawl.crawl", new_callable=AsyncMock) as mock_crawl, \
-             patch("sys.argv", ["caliper", "https://example.com", str(output)]):
+        with (
+            patch("caliper.crawl.crawl", new_callable=AsyncMock) as mock_crawl,
+            patch("sys.argv", ["caliper", "https://example.com", str(output)]),
+        ):
             main()
         _, kwargs = mock_crawl.call_args
         assert kwargs["show_progress"] is True
 
     def test_no_progress_flag(self, tmp_path):
         output = tmp_path / "out.csv"
-        with patch("caliper.crawl.crawl", new_callable=AsyncMock) as mock_crawl, \
-             patch("sys.argv", ["caliper", "--no-progress", "https://example.com", str(output)]):
+        with (
+            patch("caliper.crawl.crawl", new_callable=AsyncMock) as mock_crawl,
+            patch(
+                "sys.argv",
+                ["caliper", "--no-progress", "https://example.com", str(output)],
+            ),
+        ):
             main()
         _, kwargs = mock_crawl.call_args
         assert kwargs["show_progress"] is False
 
     def test_keyboard_interrupt_raises_systemexit(self, tmp_path):
         output = tmp_path / "out.csv"
-        with patch("caliper.crawl.crawl", new_callable=AsyncMock, side_effect=KeyboardInterrupt), \
-             patch("sys.argv", ["caliper", "https://example.com", str(output)]):
+        with (
+            patch(
+                "caliper.crawl.crawl",
+                new_callable=AsyncMock,
+                side_effect=KeyboardInterrupt,
+            ),
+            patch("sys.argv", ["caliper", "https://example.com", str(output)]),
+        ):
             with pytest.raises(SystemExit):
                 main()
