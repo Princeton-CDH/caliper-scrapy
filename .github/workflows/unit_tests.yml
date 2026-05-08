@@ -24,12 +24,8 @@ jobs:
         uses: astral-sh/setup-uv@v7
         with:
           python-version: ${{ matrix.python-version }}
-      - name: Create python venv with uv
-        run: uv venv
-      - name: Install spider-rs via pip
-        run: uv run pip install spider-rs==0.0.56
       - name: Install dependencies
-        run: uv sync --extra dev --no-install-package spider-rs
+        run: uv sync --extra dev
       - name: Run tests
         run: uv run pytest --cov-report=xml --cov-report=term
       # Only upload test coverage for Python 3.12

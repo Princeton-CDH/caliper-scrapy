@@ -25,7 +25,9 @@ classifiers = [
   "Programming Language :: Python :: Implementation :: PyPy",
 ]
 dependencies = [
-  "spider_rs",
+  # 0.0.58 fixes version metadata but is not on pypi
+  "spider_rs @ git+https://github.com/spider-rs/spider-py.git@v0.0.58",
+  # "spider_rs>=0.0.58",
   "tqdm"
 ]
 
@@ -49,6 +51,10 @@ extra-dependencies = [
 ]
 [tool.hatch.envs.types.scripts]
 check = "mypy --install-types --non-interactive {args:src/caliper tests}"
+
+[tool.hatch.metadata]
+# allow installing dependencies from GitHub
+allow-direct-references = true
 
 [tool.pytest.ini_options]
 addopts = "--cov=caliper --cov-report=term-missing --import-mode=importlib"
