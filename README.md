@@ -13,13 +13,14 @@ when the page was accessed.
 - **Recommended:** create and activate a python 3.x virtual environment
 
 - Use pip to install required python dependencies:
+
 ```sh
 pip install -e .
 ```
 
 ## Usage
 
-To run the spider, call it with the URL for the site you want to crawl and the output filename for the CSV report to be generated.  Only links within the same domain (local URLs or absolute) will be followed.
+To run the spider, call it with the URL for the site you want to crawl and the output filename for the CSV report to be generated. Only links within the same domain (local URLs or absolute) will be followed.
 
 ```sh
 caliper https://startwords.cdh.princeton.edu startwords-datetime-vXX.csv
@@ -28,11 +29,13 @@ caliper https://startwords.cdh.princeton.edu startwords-datetime-vXX.csv
 ### Development Setup
 
 Install development dependencies:
+
 ```
 pip install -e ".[dev]""
 ```
 
 If you plan to contribute to this repository, install the configured pre-commit hooks:
+
 ```
 pre-commit install
 ```
@@ -40,4 +43,3 @@ pre-commit install
 ## License
 
 `caliper` is distributed under the terms of the [Apache 2](LICENSE) license.
-
