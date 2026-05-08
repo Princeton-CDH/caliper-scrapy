@@ -37,7 +37,7 @@ Source = "https://github.com/princeton-CDH/caliper"
 caliper = "caliper.crawl:main"
 
 [project.optional-dependencies]
-dev = ["pre-commit"]
+dev = ["pre-commit", "pytest", "pytest-cov"]
 
 [tool.hatch.version]
 path = "src/caliper/__init__.py"
@@ -49,8 +49,11 @@ extra-dependencies = [
 [tool.hatch.envs.types.scripts]
 check = "mypy --install-types --non-interactive {args:src/caliper tests}"
 
+[tool.pytest.ini_options]
+addopts = "--cov=caliper --cov-report=term-missing --import-mode=importlib"
+
 [tool.coverage.run]
-source_pkgs = ["caliper", "tests"]
+source_pkgs = ["caliper"]
 branch = true
 parallel = true
 omit = [
