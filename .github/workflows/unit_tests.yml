@@ -27,7 +27,7 @@ jobs:
       - name: Create python venv with uv
         run: uv venv
       - name: Install spider-rs via pip
-        run: uv pip install spider-rs
+        run: uv run pip install spider-rs
       - name: Install dependencies
         run: uv sync --extra dev --no-install-package spider-rs
       - name: Run tests
