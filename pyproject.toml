@@ -40,7 +40,7 @@ caliper = "caliper.crawl:main"
 dev = ["pre-commit"]
 
 [tool.hatch.version]
-path = "src/caliper/__about__.py"
+path = "src/caliper/__init__.py"
 
 [tool.hatch.envs.types]
 extra-dependencies = [
