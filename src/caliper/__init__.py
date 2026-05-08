@@ -1,3 +1,3 @@
-# SPDX-FileCopyrightText: 2024-present rlskoeser <rebecca.s.koeser@princeton.edu>
+# SPDX-FileCopyrightText: 2024-present Center for Digital Humanities, Princeton University
 #
-# SPDX-License-Identifier: MIT
+# SPDX-License-Identifier: Apache-2.0

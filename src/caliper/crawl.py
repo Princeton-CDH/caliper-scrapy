@@ -1,3 +1,7 @@
+# SPDX-FileCopyrightText: 2024-present Center for Digital Humanities, Princeton University
+#
+# SPDX-License-Identifier: Apache-2.0
+
 import asyncio
 import argparse
 import csv
@@ -7,9 +11,10 @@ import pathlib
 from tqdm import tqdm
 from spider_rs import Website
 
-# Crawl responsibly by identifying yourself (and your website) on the user-agent
-USER_AGENT = "caliper (+http://cdh.princeton.edu)"
-# TODO: include version
+from caliper import __version__
+
+# Provide user agent to identify this tool via user-agent header
+USER_AGENT = f"caliper v{__version__} (+http://cdh.princeton.edu)"
 
 
 class ReportSubscription:
