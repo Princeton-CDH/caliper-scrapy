@@ -9,6 +9,7 @@ import datetime
 import pathlib
 import urllib.parse
 
+from inscriptis import get_text
 from selectolax.parser import HTMLParser
 from tqdm import tqdm
 from spider_rs import Website
@@ -18,46 +19,44 @@ from caliper import __version__
 # Provide user agent to identify this tool via user-agent header
 USER_AGENT = f"caliper v{__version__} (+http://cdh.princeton.edu)"
 
+# Supported content extraction formats
+FORMAT_HTML = "html"
+FORMAT_TEXT = "text"
+SUPPORTED_FORMATS = (FORMAT_HTML, FORMAT_TEXT)
 
-_BLOCK_TAGS = frozenset(
-    {
-        "address",
-        "article",
-        "aside",
-        "blockquote",
-        "dd",
-        "div",
-        "dl",
-        "dt",
-        "figcaption",
-        "figure",
-        "footer",
-        "form",
-        "h1",
-        "h2",
-        "h3",
-        "h4",
-        "h5",
-        "h6",
-        "header",
-        "hr",
-        "li",
-        "main",
-        "nav",
-        "ol",
-        "p",
-        "pre",
-        "section",
-        "table",
-        "tbody",
-        "td",
-        "tfoot",
-        "th",
-        "thead",
-        "tr",
-        "ul",
-    }
-)
+
+def parse_formats(value):
+    """Parse a comma-separated --format value into an ordered, de-duplicated
+    tuple of supported format names. Raises ValueError for unknown formats."""
+    if not value:
+        return ()
+    parts = [p.strip().lower() for p in value.split(",") if p.strip()]
+    seen = []
+    for p in parts:
+        if p not in SUPPORTED_FORMATS:
+            raise ValueError(
+                f"Unsupported format {p!r}; choose from {', '.join(SUPPORTED_FORMATS)}"
+            )
+        if p not in seen:
+            seen.append(p)
+    return tuple(seen)
+
+
+def content_column_names(formats):
+    """Return CSV column names for the requested formats.
+
+    - () -> ()
+    - ("html",) and no other formats -> ("content",)   (legacy single column)
+    - ("text",) and no other formats -> ("content_text",)
+    - multiple formats -> ("content_html", "content_text", ...) in given order
+    """
+    if not formats:
+        return ()
+    if len(formats) == 1:
+        if formats[0] == FORMAT_HTML:
+            return ("content",)
+        return (f"content_{formats[0]}",)
+    return tuple(f"content_{f}" for f in formats)
 
 
 class ReportSubscription:
@@ -73,14 +72,15 @@ class ReportSubscription:
         "timestamp",
     ]
 
-    def __init__(self, output, show_progress=True, selector=None, text=False):
+    def __init__(self, output, show_progress=True, selector=None, formats=()):
         self.selector = selector
-        self.text = text
+        self.formats = tuple(formats)
         if selector:
             self._validate_selector(selector)
         self.filehandle = output.open("w")
         self.csvwriter = csv.writer(self.filehandle)
-        self.csvwriter.writerow(self.columns + (["content"] if selector else []))
+        extra = list(content_column_names(self.formats)) if selector else []
+        self.csvwriter.writerow(self.columns + extra)
 
         # postfix automatically starts with a comma
         disable_progress = not show_progress
@@ -111,39 +111,41 @@ class ReportSubscription:
             # timestamp in isoformat so we can filter csv more easily
             datetime.datetime.now(tz=datetime.UTC).isoformat(),
         ]
-        if self.selector:
+        if self.selector and self.formats:
             content_type = page.headers.get("content-type") or ""
-            row.append(
-                self._extract_content(page) if "text/html" in content_type else ""
-            )
+            if "text/html" in content_type:
+                extracted = self._extract_content(page)
+            else:
+                extracted = {fmt: "" for fmt in self.formats}
+            for fmt in self.formats:
+                row.append(extracted.get(fmt, ""))
         self.csvwriter.writerow(row)
         self.page_count += 1
         self.pbar.update(self.page_count)
         self.status.set_postfix_str(f"URL: {page.url}")
 
-    @staticmethod
-    def _node_to_text(node):
-        parts = []
-        for child in node.traverse(include_text=True):
-            if child.tag == "-text":
-                parts.append(child.text_content or "")
-            elif child.tag == "br" or child.tag in _BLOCK_TAGS:
-                if parts and not parts[-1].endswith("\n"):
-                    parts.append("\n")
-        return "".join(parts)
-
     def _extract_content(self, page):
+        """Extract content from the matched element in the requested formats.
+
+        Returns a dict mapping format name to extracted content. Always returns
+        a dict with an entry for each requested format; missing matches or
+        parse errors yield empty strings.
+        """
+        result = {fmt: "" for fmt in self.formats}
         try:
             if not page.content:
-                return ""
+                return result
             node = HTMLParser(page.content).css_first(self.selector)
         except Exception:
-            return ""
+            return result
         if node is None:
-            return ""
-        if self.text:
-            return self._node_to_text(node)
-        return node.html or ""
+            return result
+        node_html = node.html or ""
+        if FORMAT_HTML in self.formats:
+            result[FORMAT_HTML] = node_html
+        if FORMAT_TEXT in self.formats:
+            result[FORMAT_TEXT] = get_text(node_html).strip() if node_html else ""
+        return result
 
     def __del__(self):
         if hasattr(self, "filehandle"):
@@ -155,7 +157,7 @@ class ReportSubscription:
 
 
 async def crawl(
-    url, output, show_progress=True, selector=None, text=False, html_only=False
+    url, output, show_progress=True, selector=None, formats=(), html_only=False
 ):
     website = (
         Website(url)
@@ -169,7 +171,7 @@ async def crawl(
         website = website.with_whitelist_url([base_path])
     website.crawl(
         ReportSubscription(
-            output, show_progress=show_progress, selector=selector, text=text
+            output, show_progress=show_progress, selector=selector, formats=formats
         )
     )
 
@@ -196,8 +198,17 @@ def main():
         default=None,
     )
     parser.add_argument(
+        "--format",
+        dest="format",
+        help=(
+            "Content format(s) to extract when --select is used; "
+            "comma-separated list of: html, text. Defaults to html."
+        ),
+        default=None,
+    )
+    parser.add_argument(
         "--text",
-        help="Extract plain text instead of HTML (requires --select)",
+        help="Shorthand for --format text (mutually exclusive with --format)",
         action="store_true",
         default=False,
     )
@@ -208,6 +219,23 @@ def main():
         default=False,
     )
     args = parser.parse_args()
+
+    if args.text and args.format is not None:
+        parser.error("--text and --format are mutually exclusive")
+
+    try:
+        if args.text:
+            formats = (FORMAT_TEXT,)
+        elif args.format is not None:
+            formats = parse_formats(args.format)
+        elif args.select:
+            # backward-compatible default: HTML when --select is given alone
+            formats = (FORMAT_HTML,)
+        else:
+            formats = ()
+    except ValueError as e:
+        raise SystemExit(e)
+
     try:
         asyncio.run(
             crawl(
@@ -215,7 +243,7 @@ def main():
                 args.output,
                 show_progress=args.progress,
                 selector=args.select,
-                text=args.text,
+                formats=formats,
                 html_only=args.html_only,
             )
         )
