@@ -26,6 +26,8 @@ classifiers = [
 ]
 dependencies = [
   "spider_rs",
+  "selectolax",
+  "inscriptis",
   "tqdm"
 ]
 

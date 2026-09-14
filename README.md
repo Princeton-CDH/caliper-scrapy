@@ -26,6 +26,34 @@ To run the spider, call it with the URL for the site you want to crawl and the o
 caliper https://startwords.cdh.princeton.edu startwords-datetime-vXX.csv
 ```
 
+If the starting URL has a non-root path (e.g. `https://example.com/blog/`),
+the crawl is automatically restricted to URLs under that path.
+
+#### Options
+
+- `--html-only` — crawl HTML pages only, skipping other resources (CSS, JS, images, etc.).
+- `--select CSS_SELECTOR` — extract content matching the given CSS selector
+  from each HTML page into an additional column in the CSV report.
+- `--format html|text|html,text` — when used with `--select`, control which
+  content format(s) to extract. Multiple formats produce one column each
+  (`content_html`, `content_text`). Defaults to `html`. Plain-text extraction
+  uses [inscriptis](https://github.com/weblyzard/inscriptis).
+- `--text` — shorthand for `--format text`.
+- `--no-progress` — suppress progress output.
+
+Examples:
+
+```sh
+# extract the article HTML
+caliper --select "article" https://example.com/blog/ out.csv
+
+# extract plain text only
+caliper --select "article" --text https://example.com/blog/ out.csv
+
+# extract both HTML and text into separate columns
+caliper --select "article" --format html,text https://example.com/blog/ out.csv
+```
+
 ### Development Setup
 
 Install development dependencies:
