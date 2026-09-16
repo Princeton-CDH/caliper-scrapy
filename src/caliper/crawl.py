@@ -61,6 +61,7 @@ def content_column_names(formats):
 
 
 class ReportSubscription:
+    default_selector = "body"
     columns = [
         "url",
         "status_code",
@@ -77,19 +78,22 @@ class ReportSubscription:
         self, output, show_progress=True, selector=None, formats=(), images=False
     ):
         self.formats = tuple(formats)
-        self.selector = selector if selector is not None else (
-            "body" if self.formats else None
-        )
+        if selector:
+            self._validate_selector(selector)
+        self.selector = selector or (self.default_selector if self.formats else None)
         self.images = images
         self.session = requests.Session() if images else None
         if self.session:
             self.session.headers["User-Agent"] = USER_AGENT
-        if selector:
-            self._validate_selector(selector)
         self.filehandle = output.open("w")
-        self.csvwriter = csv.writer(self.filehandle)
-        extra = list(content_column_names(self.formats)) if selector else []
-        self.csvwriter.writerow(self.columns + extra)
+        self.content_columns = (
+            list(content_column_names(self.formats)) if self.selector else []
+        )
+        self.fieldnames = self.columns + self.content_columns
+        self.csvwriter = csv.DictWriter(
+            self.filehandle, fieldnames=self.fieldnames
+        )
+        self.csvwriter.writeheader()
 
         # postfix automatically starts with a comma
         disable_progress = not show_progress
@@ -119,30 +123,25 @@ class ReportSubscription:
                 parser = HTMLParser(page.content)
             except Exception:
                 pass
-        row = [
+        row = self._metadata_row(
             page.url,
             page.status_code,
-            # some titles (*cough* PPA) include leading/trailing whitesapce
+            # some titles (*cough* PPA) include leading/trailing whitespace
             str(page.title()).strip(),
-            page.headers.get("content-type"),
-            page.headers.get("last-modified"),
-            page.headers.get("content-length"),
-            page.headers.get("date"),
+            page.headers,
             len(page.content),
-            # timestamp in isoformat so we can filter csv more easily
-            datetime.datetime.now(tz=datetime.UTC).isoformat(),
-        ]
+        )
         if self.selector and self.formats:
             if parser is not None:
                 extracted = self._extract_content(page, parser)
             else:
                 extracted = {fmt: "" for fmt in self.formats}
-            for fmt in self.formats:
-                row.append(extracted.get(fmt, ""))
+            for fmt, column in zip(self.formats, self.content_columns):
+                row[column] = extracted.get(fmt, "")
         self.csvwriter.writerow(row)
         if self.images and parser is not None:
             for image_url in self._extract_image_urls(page, parser):
-                self.csvwriter.writerow(self._image_row(image_url, len(row)))
+                self.csvwriter.writerow(self._image_row(image_url))
         self.page_count += 1
         self.pbar.update(self.page_count)
         self.status.set_postfix_str(f"URL: {page.url}")
@@ -197,10 +196,10 @@ class ReportSubscription:
         except Exception:
             return []
 
-    def _image_row(self, image_url, column_count):
+    def _image_row(self, image_url):
         """Fetch image headers and return a report row for the image URL."""
-        headers = {}
         status_code = ""
+        headers = {}
         if self.session:
             try:
                 response = self.session.head(image_url, allow_redirects=True)
@@ -208,18 +207,24 @@ class ReportSubscription:
                 headers = response.headers
             except requests.RequestException:
                 pass
-        row = [
-            image_url,
-            status_code,
-            "",
-            headers.get("content-type", ""),
-            headers.get("last-modified", ""),
-            headers.get("content-length", ""),
-            headers.get("date", ""),
-            "",
-            datetime.datetime.now(tz=datetime.UTC).isoformat(),
-        ]
-        return row + [""] * (column_count - len(row))
+        return self._metadata_row(image_url, status_code, "", headers, "")
+
+    @staticmethod
+    def _metadata_row(url, status_code, title, headers, size):
+        """Build the shared metadata columns for page and image rows."""
+        headers = headers or {}
+        return {
+            "url": url,
+            "status_code": status_code,
+            "title": title,
+            "content_type": headers.get("content-type", ""),
+            "last_modified": headers.get("last-modified", ""),
+            "content_length": headers.get("content-length", ""),
+            "date": headers.get("date", ""),
+            "size": size,
+            # timestamp in isoformat so we can filter csv more easily
+            "timestamp": datetime.datetime.now(tz=datetime.UTC).isoformat(),
+        }
 
     def __del__(self):
         if hasattr(self, "filehandle"):
