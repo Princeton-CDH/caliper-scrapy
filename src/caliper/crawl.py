@@ -15,10 +15,7 @@ from selectolax.parser import HTMLParser
 from tqdm import tqdm
 from spider_rs import Website
 
-from caliper import __version__
-
-# Provide user agent to identify this tool via user-agent header
-USER_AGENT = f"caliper v{__version__} (+http://cdh.princeton.edu)"
+from caliper import USER_AGENT
 
 # Supported content extraction formats
 FORMAT_HTML = "html"

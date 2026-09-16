@@ -59,6 +59,23 @@ caliper --select "article" --text https://example.com/blog/ out.csv
 caliper --select "article" --format html,text https://example.com/blog/ out.csv
 ```
 
+To download a subset of images from a report, filter by an image URL substring.
+Downloaded files are named using the last path segment of their referring page:
+
+```sh
+python scripts/download_images.py report.csv "media/images" --output-directory images
+```
+
+Use `--referrer-pattern` to limit downloads to images referenced by matching
+page URLs or paths. For example, this selects pages under
+`/projects/<slug>/`:
+
+```sh
+python scripts/download_images.py report.csv "media/images" \
+  --referrer-pattern '*/projects/*/' \
+  --output-directory images
+```
+
 ### Development Setup
 
 Install development dependencies:

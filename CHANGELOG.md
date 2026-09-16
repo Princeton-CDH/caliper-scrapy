@@ -15,6 +15,8 @@
 - The default content selector is `body`, and `--images` can add image URLs
   found in each page to the report without requesting page content. Image rows
   include their referring page URL and duplicate image requests are cached.
+- Added `scripts/download_images.py` to download report images filtered by URL
+  substring and optional referring-page glob pattern.
 - Plain-text extraction now uses [inscriptis](https://github.com/weblyzard/inscriptis)
   for higher-quality rendering of block elements, lists, and tables.
 - Minimum supported Python version is now 3.10; added support for Python 3.13
