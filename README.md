@@ -42,7 +42,8 @@ the crawl is automatically restricted to URLs under that path.
 - `--text` — shorthand for `--format text`.
 - `--images` — include URLs from `img` elements as additional report rows.
   Relative image URLs are resolved against the page URL. Image rows contain
-  the URL and leave response metadata blank until the image is fetched.
+  the URL, the referring page in the `referrer` column, and response metadata
+  from a HEAD request. Each image URL is fetched at most once per report.
 - `--no-progress` — suppress progress output.
 
 Examples:

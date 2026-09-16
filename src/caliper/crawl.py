@@ -71,6 +71,7 @@ class ReportSubscription:
         "content_length",
         "date",
         "size",
+        "referrer",
         "timestamp",
     ]
 
@@ -83,6 +84,7 @@ class ReportSubscription:
         self.selector = selector or (self.default_selector if self.formats else None)
         self.images = images
         self.session = requests.Session() if images else None
+        self.image_metadata = {}
         if self.session:
             self.session.headers["User-Agent"] = USER_AGENT
         self.filehandle = output.open("w")
@@ -141,7 +143,7 @@ class ReportSubscription:
         self.csvwriter.writerow(row)
         if self.images and parser is not None:
             for image_url in self._extract_image_urls(page, parser):
-                self.csvwriter.writerow(self._image_row(image_url))
+                self.csvwriter.writerow(self._image_row(image_url, page.url))
         self.page_count += 1
         self.pbar.update(self.page_count)
         self.status.set_postfix_str(f"URL: {page.url}")
@@ -196,25 +198,31 @@ class ReportSubscription:
         except Exception:
             return []
 
-    def _image_row(self, image_url):
+    def _image_row(self, image_url, referrer):
         """Fetch image headers and return a report row for the image URL."""
-        status_code = ""
-        headers = {}
-        if self.session:
-            try:
-                response = self.session.head(image_url, allow_redirects=True)
-                status_code = response.status_code
-                headers = response.headers
-            except requests.RequestException:
-                pass
-        return self._metadata_row(image_url, status_code, "", headers, "")
+        if image_url not in self.image_metadata:
+            status_code = ""
+            headers = {}
+            if self.session:
+                try:
+                    response = self.session.head(image_url, allow_redirects=True)
+                    status_code = response.status_code
+                    headers = response.headers
+                except requests.RequestException:
+                    pass
+            self.image_metadata[image_url] = (status_code, headers)
+        status_code, headers = self.image_metadata[image_url]
+        return self._metadata_row(
+            image_url, status_code, "", headers, "", referrer=referrer
+        )
 
     @staticmethod
-    def _metadata_row(url, status_code, title, headers, size):
+    def _metadata_row(url, status_code, title, headers, size, referrer=""):
         """Build the shared metadata columns for page and image rows."""
         headers = headers or {}
         return {
             "url": url,
+            "referrer": referrer,
             "status_code": status_code,
             "title": title,
             "content_type": headers.get("content-type", ""),
