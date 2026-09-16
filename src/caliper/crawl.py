@@ -10,14 +10,12 @@ import pathlib
 import urllib.parse
 
 from inscriptis import get_text
+import requests
 from selectolax.parser import HTMLParser
 from tqdm import tqdm
 from spider_rs import Website
 
-from caliper import __version__
-
-# Provide user agent to identify this tool via user-agent header
-USER_AGENT = f"caliper v{__version__} (+http://cdh.princeton.edu)"
+from caliper import USER_AGENT
 
 # Supported content extraction formats
 FORMAT_HTML = "html"
@@ -60,6 +58,7 @@ def content_column_names(formats):
 
 
 class ReportSubscription:
+    default_selector = "body"
     columns = [
         "url",
         "status_code",
@@ -69,18 +68,31 @@ class ReportSubscription:
         "content_length",
         "date",
         "size",
+        "referrer",
         "timestamp",
     ]
 
-    def __init__(self, output, show_progress=True, selector=None, formats=()):
-        self.selector = selector
+    def __init__(
+        self, output, show_progress=True, selector=None, formats=(), images=False
+    ):
         self.formats = tuple(formats)
         if selector:
             self._validate_selector(selector)
+        self.selector = selector or (self.default_selector if self.formats else None)
+        self.images = images
+        self.session = requests.Session() if images else None
+        self.image_metadata = {}
+        if self.session:
+            self.session.headers["User-Agent"] = USER_AGENT
         self.filehandle = output.open("w")
-        self.csvwriter = csv.writer(self.filehandle)
-        extra = list(content_column_names(self.formats)) if selector else []
-        self.csvwriter.writerow(self.columns + extra)
+        self.content_columns = (
+            list(content_column_names(self.formats)) if self.selector else []
+        )
+        self.fieldnames = self.columns + self.content_columns
+        self.csvwriter = csv.DictWriter(
+            self.filehandle, fieldnames=self.fieldnames
+        )
+        self.csvwriter.writeheader()
 
         # postfix automatically starts with a comma
         disable_progress = not show_progress
@@ -98,33 +110,42 @@ class ReportSubscription:
             raise ValueError(f"Invalid CSS selector {selector!r}: {e}") from e
 
     def __call__(self, page):
-        row = [
+        content_type = page.headers.get("content-type") or ""
+        parser = None
+        if (
+            "text/html" in content_type
+            and page.content
+            and (self.selector and self.formats or self.images)
+        ):
+            parser = False
+            try:
+                parser = HTMLParser(page.content)
+            except Exception:
+                pass
+        row = self._metadata_row(
             page.url,
             page.status_code,
-            # some titles (*cough* PPA) include leading/trailing whitesapce
+            # some titles (*cough* PPA) include leading/trailing whitespace
             str(page.title()).strip(),
-            page.headers.get("content-type"),
-            page.headers.get("last-modified"),
-            page.headers.get("content-length"),
-            page.headers.get("date"),
+            page.headers,
             len(page.content),
-            # timestamp in isoformat so we can filter csv more easily
-            datetime.datetime.now(tz=datetime.UTC).isoformat(),
-        ]
+        )
         if self.selector and self.formats:
-            content_type = page.headers.get("content-type") or ""
-            if "text/html" in content_type:
-                extracted = self._extract_content(page)
+            if parser is not None:
+                extracted = self._extract_content(page, parser)
             else:
                 extracted = {fmt: "" for fmt in self.formats}
-            for fmt in self.formats:
-                row.append(extracted.get(fmt, ""))
+            for fmt, column in zip(self.formats, self.content_columns):
+                row[column] = extracted.get(fmt, "")
         self.csvwriter.writerow(row)
+        if self.images and parser is not None:
+            for image_url in self._extract_image_urls(page, parser):
+                self.csvwriter.writerow(self._image_row(image_url, page.url))
         self.page_count += 1
         self.pbar.update(self.page_count)
         self.status.set_postfix_str(f"URL: {page.url}")
 
-    def _extract_content(self, page):
+    def _extract_content(self, page, parser=None):
         """Extract content from the matched element in the requested formats.
 
         Returns a dict mapping format name to extracted content. Always returns
@@ -135,7 +156,11 @@ class ReportSubscription:
         try:
             if not page.content:
                 return result
-            node = HTMLParser(page.content).css_first(self.selector)
+            if parser is False:
+                return result
+            if parser is None:
+                parser = HTMLParser(page.content)
+            node = parser.css_first(self.selector)
         except Exception:
             return result
         if node is None:
@@ -147,9 +172,70 @@ class ReportSubscription:
             result[FORMAT_TEXT] = get_text(node_html).strip() if node_html else ""
         return result
 
+    @staticmethod
+    def _extract_image_urls(page, parser=None):
+        """Return image sources in the page as absolute URLs.
+
+        This is intentionally a small first pass: it records ``src`` values from
+        ``img`` elements and leaves downloading or validating those resources to
+        the crawler.  Relative sources are resolved against the page URL.
+        """
+        if not page.content:
+            return []
+        if parser is False:
+            return []
+        try:
+            if parser is None:
+                parser = HTMLParser(page.content)
+            urls = []
+            for image in parser.css("img[src]"):
+                source = image.attributes["src"]
+                urls.append(urllib.parse.urljoin(page.url, source))
+            return urls
+        except Exception:
+            return []
+
+    def _image_row(self, image_url, referrer):
+        """Fetch image headers and return a report row for the image URL."""
+        if image_url not in self.image_metadata:
+            status_code = ""
+            headers = {}
+            if self.session:
+                try:
+                    response = self.session.head(image_url, allow_redirects=True)
+                    status_code = response.status_code
+                    headers = response.headers
+                except requests.RequestException:
+                    pass
+            self.image_metadata[image_url] = (status_code, headers)
+        status_code, headers = self.image_metadata[image_url]
+        return self._metadata_row(
+            image_url, status_code, "", headers, "", referrer=referrer
+        )
+
+    @staticmethod
+    def _metadata_row(url, status_code, title, headers, size, referrer=""):
+        """Build the shared metadata columns for page and image rows."""
+        headers = headers or {}
+        return {
+            "url": url,
+            "referrer": referrer,
+            "status_code": status_code,
+            "title": title,
+            "content_type": headers.get("content-type", ""),
+            "last_modified": headers.get("last-modified", ""),
+            "content_length": headers.get("content-length", ""),
+            "date": headers.get("date", ""),
+            "size": size,
+            # timestamp in isoformat so we can filter csv more easily
+            "timestamp": datetime.datetime.now(tz=datetime.UTC).isoformat(),
+        }
+
     def __del__(self):
         if hasattr(self, "filehandle"):
             self.filehandle.close()
+        if getattr(self, "session", None):
+            self.session.close()
         if hasattr(self, "status"):
             self.status.close()
         if hasattr(self, "pbar"):
@@ -157,7 +243,13 @@ class ReportSubscription:
 
 
 async def crawl(
-    url, output, show_progress=True, selector=None, formats=(), html_only=False
+    url,
+    output,
+    show_progress=True,
+    selector=None,
+    formats=(),
+    html_only=False,
+    images=False,
 ):
     website = (
         Website(url)
@@ -171,7 +263,11 @@ async def crawl(
         website = website.with_whitelist_url([base_path])
     website.crawl(
         ReportSubscription(
-            output, show_progress=show_progress, selector=selector, formats=formats
+            output,
+            show_progress=show_progress,
+            selector=selector,
+            formats=formats,
+            images=images,
         )
     )
 
@@ -218,6 +314,12 @@ def main():
         action="store_true",
         default=False,
     )
+    parser.add_argument(
+        "--images",
+        help="Include URLs from img elements as additional report rows",
+        action="store_true",
+        default=False,
+    )
     args = parser.parse_args()
 
     if args.text and args.format is not None:
@@ -229,7 +331,6 @@ def main():
         elif args.format is not None:
             formats = parse_formats(args.format)
         elif args.select:
-            # backward-compatible default: HTML when --select is given alone
             formats = (FORMAT_HTML,)
         else:
             formats = ()
@@ -245,6 +346,7 @@ def main():
                 selector=args.select,
                 formats=formats,
                 html_only=args.html_only,
+                images=args.images,
             )
         )
     except KeyboardInterrupt:
