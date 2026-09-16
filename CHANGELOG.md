@@ -12,6 +12,8 @@
   format(s); accepts a comma-separated list of `html` and `text` and adds one
   column per requested format (`content_html` / `content_text`).
 - New `--text` option is a shorthand for `--format text`.
+- The default content selector is `body`, and `--images` can add image URLs
+  found in each page to the report without requesting page content.
 - Plain-text extraction now uses [inscriptis](https://github.com/weblyzard/inscriptis)
   for higher-quality rendering of block elements, lists, and tables.
 - Minimum supported Python version is now 3.10; added support for Python 3.13

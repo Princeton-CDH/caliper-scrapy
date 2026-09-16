@@ -28,7 +28,8 @@ dependencies = [
   "spider_rs",
   "selectolax",
   "inscriptis",
-  "tqdm"
+  "tqdm",
+  "requests"
 ]
 
 [project.urls]

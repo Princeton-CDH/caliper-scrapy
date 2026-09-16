@@ -33,12 +33,16 @@ the crawl is automatically restricted to URLs under that path.
 
 - `--html-only` — crawl HTML pages only, skipping other resources (CSS, JS, images, etc.).
 - `--select CSS_SELECTOR` — extract content matching the given CSS selector
-  from each HTML page into an additional column in the CSV report.
+  from each HTML page into an additional column in the CSV report. Defaults
+  to `body` when content extraction is requested.
 - `--format html|text|html,text` — when used with `--select`, control which
   content format(s) to extract. Multiple formats produce one column each
   (`content_html`, `content_text`). Defaults to `html`. Plain-text extraction
   uses [inscriptis](https://github.com/weblyzard/inscriptis).
 - `--text` — shorthand for `--format text`.
+- `--images` — include URLs from `img` elements as additional report rows.
+  Relative image URLs are resolved against the page URL. Image rows contain
+  the URL and leave response metadata blank until the image is fetched.
 - `--no-progress` — suppress progress output.
 
 Examples:
